@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "365385138869",
+    "project_id": "chatbotenglish-df85d",
+    "storage_bucket": "chatbotenglish-df85d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:365385138869:android:a899f4b944eb2dc6c9f4fc",
+        "android_client_info": {
+          "package_name": "com.example.chatbot3"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "365385138869-i4p2vm2is81vied93rb7fkfi3r7d2l0r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_JGwFFSVFniTyDwr4PPuXSR7kwJRcpSA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "365385138869-i4p2vm2is81vied93rb7fkfi3r7d2l0r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "365385138869-7bcenq3dgi6ee18h9sve3uthemsao204.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.chatbot3"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
