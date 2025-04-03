@@ -34,6 +34,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       } catch (e) {
         emit(const AuthStateLoggedOut(errorMessage: ''));
       }
+      emit(AuthStateNeedsVerification());
     });
     on<AuthEventSendEmailVerification>((event, emit) async {
       final user = _auth.currentUser;

@@ -1,3 +1,4 @@
+import 'package:chatbot3/views/verify_email_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../auth/auth_bloc.dart';
@@ -18,7 +19,7 @@ class _LoginViewState extends State<LoginView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Giriş Yap')),
+      appBar: AppBar(title: const Text('Giriş Yap'),),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -54,7 +55,13 @@ class _LoginViewState extends State<LoginView> {
                     const SnackBar(content: Text('Başarıyla giriş yapıldı!')),
                   );
                 }
-                if (state is AuthStateLoggedOut && state.errorMessage != null) {
+                else if (state is AuthStateNeedsVerification) {
+                  // Navigate to verification screen
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (context) => const VerifyEmailView()),
+                  );
+                }
+                else if (state is AuthStateLoggedOut && state.errorMessage != null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(state.errorMessage!)),
                   );
@@ -88,6 +95,12 @@ class _LoginViewState extends State<LoginView> {
                         context.read<AuthBloc>().add(AuthEventForgotPassword(email: email ));
                       },
                       child: const Text('Şifremi Unuttum'),
+                    ),
+                    TextButton(
+                      onPressed: () {
+
+                      },
+                      child: const Text('Google ile giriş yap.'),
                     ),
                   ],
                 );

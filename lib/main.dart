@@ -1,21 +1,35 @@
+import 'package:chatbot3/services/chat_service.dart';
+import 'package:chatbot3/views/chat_screen.dart';
 import 'package:chatbot3/views/forgot_password_view.dart';
 import 'package:chatbot3/views/login_view.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'auth/auth_bloc.dart';
 import 'auth/auth_event.dart';
 import 'auth/auth_state.dart';
-import 'firebase_options.dart';
+import 'cubit/chat_cubit.dart';
 import 'loading_screen.dart';
 import 'views/register_view.dart';
 import 'views/verify_email_view.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+  await dotenv.load(fileName: ".env");
+  var _ChatService = ChatService();
   runApp(
-    BlocProvider(
-      create: (context) => AuthBloc()..add(const AuthEventInitialize()),
+    MultiBlocProvider(
+      providers: [
+        // Auth işlemleri için Bloc
+        BlocProvider(
+          create: (context) => AuthBloc()..add(const AuthEventInitialize()),
+        ),
+        // Chat işlemleri için Cubit
+        BlocProvider(
+          create: (context) => ChatCubit(_ChatService),
+        ),
+      ],
       child: const MyApp(),
     ),
   );
@@ -45,8 +59,6 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    context.read<AuthBloc>().add(const AuthEventInitialize());
-
     return BlocConsumer<AuthBloc, AuthState>(
       listener: (context, state) {
         if (state.isLoading) {
@@ -59,8 +71,9 @@ class HomePage extends StatelessWidget {
         }
       },
       builder: (context, state) {
+        print('Mevcut state: $state');
         if (state is AuthStateLoggedIn) {
-          return Placeholder();
+          return ChatScreen();
         } else if (state is AuthStateNeedsVerification) {
           return const VerifyEmailView();
         } else if (state is AuthStateLoggedOut) {
