@@ -21,11 +21,9 @@ void main() async {
   runApp(
     MultiBlocProvider(
       providers: [
-        // Auth işlemleri için Bloc
         BlocProvider(
           create: (context) => AuthBloc()..add(const AuthEventInitialize()),
         ),
-        // Chat işlemleri için Cubit
         BlocProvider(
           create: (context) => ChatCubit(_ChatService),
         ),
@@ -39,7 +37,6 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

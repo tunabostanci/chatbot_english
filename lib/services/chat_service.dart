@@ -1,36 +1,44 @@
-import 'dart:convert';
+import 'package:chat_gpt_sdk/chat_gpt_sdk.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
-
 
 class ChatService {
+  OpenAI? _openAI;
 
-  final String _apiKey = dotenv.env['OPENAI_API_KEY'] ?? '';
+  OpenAI get openAI {
+    if (_openAI == null) {
+      final apiKey = dotenv.env['OPENAI_API_KEY'];
+      _openAI = OpenAI.instance.build(
+        token: apiKey,
+        baseOption: HttpSetup(receiveTimeout: const Duration(seconds: 10)),
+
+      );
+    }
+    return _openAI!;
+  }
 
   Future<String> sendMessage(String message) async {
-    final url = Uri.parse("https://api.openai.com/v1/chat/completions");
-
-    final response = await http.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      },
-      body: jsonEncode({
-        "model": "gpt-3.5-turbo",
-        "messages": [
-          {"role": "system", "content": "You are an AI English tutor."},
-          {"role": "user", "content": message}
-        ],
-        "temperature": 0.7,
-      }),
+    final request = ChatCompleteText(
+      messages: [
+        {"role": "system", "content": "You are an AI English tutor. "
+            "Try to teach the user some vocabulary and grammar but make it using sentences "
+            "and by correcting. Not make it explicitly. "
+            "If user asks for something unrelated to learning english, "
+            "such as 'what do you think about elon musk' "
+            "remind the user about your aim and don't answer users question."},
+        {"role": "user", "content": message},
+      ],
+      maxToken: 200,
+      model: Gpt4oMiniChatModel(),
     );
 
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return data['choices'][0]['message']['content'];
+    final response = await openAI.onChatCompletion(request: request);
+
+    if (response != null &&
+        response.choices != null &&
+        response.choices!.isNotEmpty) {
+      return response.choices!.first.message!.content;
     } else {
-      return "AI yanıt veremedi. Hata: ${response.statusCode}";
+      return "AI yanıt veremedi.";
     }
   }
 }
