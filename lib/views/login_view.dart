@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../auth/auth_bloc.dart';
 import '../auth/auth_event.dart';
 import '../auth/auth_state.dart';
+import 'package:chatbot3/services/auth_service.dart';
 
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
@@ -97,8 +98,8 @@ class _LoginViewState extends State<LoginView> {
                       child: const Text('Şifremi Unuttum'),
                     ),
                     TextButton(
-                      onPressed: () {
-
+                      onPressed: () async{
+                       await AuthService().signInWithGoogle();
                       },
                       child: const Text('Google ile giriş yap.'),
                     ),

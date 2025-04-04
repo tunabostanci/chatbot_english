@@ -43,6 +43,7 @@ dependencies:
   flutter_dotenv: ^5.2.1
   dart_openai: ^5.1.0
   chat_gpt_sdk: ^3.1.4
+  google_sign_in: ^6.3.0
 
 dev_dependencies:
   flutter_test:
