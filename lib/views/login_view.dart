@@ -98,11 +98,17 @@ class _LoginViewState extends State<LoginView> {
                       child: const Text('Şifremi Unuttum'),
                     ),
                     TextButton(
-                      onPressed: () async{
-                       await AuthService().signInWithGoogle();
+                      onPressed: () async {
+                        final user = await AuthService().signInWithGoogle();
+                        if (user != null) {
+                          context.read<AuthBloc>().add(const AuthEventGoogleLogin());
+                        } else {
+                          print('Google girişi iptal edildi veya başarısız oldu.');
+                        }
                       },
                       child: const Text('Google ile giriş yap.'),
                     ),
+
                   ],
                 );
               },

@@ -41,4 +41,7 @@ class AuthEventForgotPassword extends AuthEvent {
   const AuthEventForgotPassword({required this.email});
 }
 
+class AuthEventGoogleLogin extends AuthEvent {
+  const AuthEventGoogleLogin();
+}
 

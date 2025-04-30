@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../services/auth_service.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
 
@@ -20,6 +22,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEventLogout>((event, emit) async {
       await _auth.signOut();
+      await GoogleSignIn().signOut();
       emit(const AuthStateLoggedOut(errorMessage: ''));
     });
 
@@ -70,6 +73,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(const AuthStateLoggedOut(
           errorMessage: 'Şifre sıfırlama başarısız!',
         ));
+      }
+    });
+    on<AuthEventGoogleLogin>((event, emit) async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        emit(AuthStateLoggedIn(user: user)); // emailVerified kontrolü yapılmadan
+      } else {
+        emit(const AuthStateLoggedOut(errorMessage: 'Google girişi başarısız.'));
       }
     });
 

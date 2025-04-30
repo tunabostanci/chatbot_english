@@ -5,22 +5,18 @@ class Conversation {
   final String title;
   final Timestamp lastUpdated;
 
-  Conversation({
-    required this.id,
-    required this.title,
-    required this.lastUpdated,
-  });
+  Conversation({required this.id, required this.title, required this.lastUpdated});
 
   factory Conversation.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Conversation(
       id: doc.id,
-      title: data['title'] ?? 'Başlıksız',
-      lastUpdated: data['lastUpdated'] ?? Timestamp.now(),
+      title: data['title'],
+      lastUpdated: data['lastUpdated'],
     );
   }
 
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toJson() {
     return {
       'title': title,
       'lastUpdated': lastUpdated,

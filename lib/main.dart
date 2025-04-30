@@ -13,10 +13,12 @@ import 'cubit/chat_cubit.dart';
 import 'loading_screen.dart';
 import 'views/register_view.dart';
 import 'views/verify_email_view.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await dotenv.load(fileName: ".env");
+  final chatCubit = ChatCubit(ChatService());
   var _ChatService = ChatService();
   runApp(
     MultiBlocProvider(

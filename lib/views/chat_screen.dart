@@ -1,31 +1,57 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:google_sign_in/google_sign_in.dart';
+import 'package:intl/intl.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../auth/auth_bloc.dart';
+import '../auth/auth_event.dart';
 import '../cubit/chat_cubit.dart';
+import '../cubit/chat_state.dart';
 
-class ChatScreen extends StatelessWidget {
-  final TextEditingController _controller = TextEditingController();
+class ChatScreen extends StatefulWidget {
+  const ChatScreen({super.key});
 
-  ChatScreen({super.key});
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final _scroll = ScrollController();
+  final TextEditingController _textController = TextEditingController();
+  late final String _uid;
+
+  @override
+  void initState() {
+    super.initState();
+    _uid = FirebaseAuth.instance.currentUser!.uid;
+    // Geçmiş sohbetleri yükle
+    context.read<ChatCubit>().loadConversations(_uid);
+  }
+
+  void _send(String conversationId, String text) {
+    if (text.trim().isEmpty) return;
+    context.read<ChatCubit>().sendMessage(_uid, conversationId, text);
+    _textController.clear();
+    _scroll.animateTo(
+      _scroll.position.maxScrollExtent + 60,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-          title: Text("AI ChatBot"),
-          elevation: 3000,
-          shadowColor: Colors.black,
-          leading: Builder(
-              builder: (context) => IconButton(
-                    onPressed: () {
-                      Scaffold.of(context).openDrawer();
-                    },
-                    icon: Icon(Icons.menu),
-                  ))),
+        title: const Text("AI ChatBot"),
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+      ),
       drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
+        child: Column(
           children: [
             UserAccountsDrawerHeader(
               accountName: Text(FirebaseAuth.instance.currentUser?.displayName ?? ''),
@@ -35,14 +61,62 @@ class ChatScreen extends StatelessWidget {
                   FirebaseAuth.instance.currentUser?.photoURL ?? '',
                 ),
               ),
-              decoration: BoxDecoration(color: Colors.blue),
             ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.0),
+              child: Text(
+                'Geçmiş Sohbetler',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: BlocBuilder<ChatCubit, ChatState>(
+                builder: (context, state) {
+                  if (state is ChatStateLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  } else if (state is ChatConversationsLoaded) {
+                    final convos = state.conversations;
+                    if (convos.isEmpty) {
+                      return const Center(child: Text('Henüz sohbet yok'));
+                    }
+                    return ListView.separated(
+                      itemCount: convos.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final convo = convos[i];
+                        final preview = convo.title.length > 30
+                            ? '${convo.title.substring(0, 30)}…'
+                            : convo.title;
+                        return ListTile(
+                          leading: const Icon(Icons.chat_bubble_outline),
+                          title: Text(
+                            preview,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            // Başlık altına lastUpdated ekleyin
+                            DateFormat('dd/MM – HH:mm').format(convo.lastUpdated as DateTime),
+                          ),
+                          onTap: () {
+                            Navigator.pop(context);
+                            context.read<ChatCubit>().loadMessages(_uid, convo.id);
+                          },
+                        );
+                      },
+                    );
+                  }
+                  // Hata veya başka durumda mesaj göster
+                  return const Center(child: Text('Veri yüklenemedi'));
+                },
+              ),
+            ),
+            const Divider(),
             ListTile(
-              leading: Icon(Icons.logout),
-              title: Text("Çıkış Yap"),
-              onTap: () async {
-                await FirebaseAuth.instance.signOut();
-                await GoogleSignIn().signOut();
+              leading: const Icon(Icons.logout),
+              title: const Text('Çıkış Yap'),
+              onTap: () {
+                context.read<AuthBloc>().add(const AuthEventLogout());
               },
             ),
           ],
@@ -51,93 +125,100 @@ class ChatScreen extends StatelessWidget {
       body: Column(
         children: [
           Expanded(
-            child: BlocBuilder<ChatCubit, List<Map<String, String>>>(
-              builder: (context, messages) {
-                return ListView.builder(
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isUser = message["sender"] == "user";
-                    final isTyping = message["message"] == "Typing...";
+            child: BlocBuilder<ChatCubit, ChatState>(
+              builder: (context, state) {
+                if (state is ChatStateLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                } else if (state is ChatMessagesLoaded) {
+                  final messages = state.messages;
 
-                    return Align(
-                      alignment:
-                          isUser ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        margin:
-                            EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        padding: EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isUser ? Colors.blueAccent : Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
+                  if (messages.isEmpty) {
+                    return const Center(child: Text('Henüz mesaj yok'));
+                  }
+                  // Scroll to bottom on new message
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_scroll.hasClients) {
+                      _scroll.jumpTo(_scroll.position.maxScrollExtent);
+                    }
+                  });
+                  return ListView.builder(
+                    controller: _scroll,
+                    itemCount: messages.length,
+                    itemBuilder: (context, index) {
+                      final message = messages[index];
+                      final isUser = message.sender == 'user';
+                      return Align(
+                        alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isUser ? Colors.blueAccent : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            message.text,
+                            style: TextStyle(
+                              color: isUser ? Colors.white : Colors.black,
+                            ),
+                          ),
                         ),
-                        child: isTyping
-                            ? _typingIndicator() // AI yazıyorsa animasyon göster
-                            : Text(
-                                message["message"]!,
-                                style: TextStyle(
-                                    color:
-                                        isUser ? Colors.white : Colors.black),
-                              ),
-                      ),
-                    );
-                  },
-                );
+                      );
+                    },
+                  );
+                }
+                return const Center(child: Text('Sohbet seçin veya yeni sohbet başlatın'));
               },
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(8.0),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
-                    controller: _controller,
-                    decoration: InputDecoration(hintText: "Type a message..."),
+                    controller: _textController,
+                    decoration: const InputDecoration(hintText: "Type a message..."),
+                    onSubmitted: (text) {
+                      final state = context.read<ChatCubit>().state;
+                      if (state is ChatMessagesLoaded) {
+                        _send(state.conversationId, text);
+                      }
+                    },
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.send, color: Colors.blue),
-                  onPressed: () {
-                    context.read<ChatCubit>().sendMessage(_controller.text);
-                    _controller.clear();
-                  },
+                  icon: const Icon(Icons.send, color: Colors.blue),
+                    onPressed: () {
+                      print('Send button pressed.');
+                      final state = context.read<ChatCubit>().state;
+                      print('Current state: $state');
+
+                      if (state is ChatConversationsLoaded) {
+                        print('Conversations list: ${state.conversations}');
+
+                        // conversations listesinden bir tane seçelim
+                        final conversation = state.conversations.isNotEmpty ? state.conversations[0] : null;
+                        if (conversation != null) {
+                          String conversationId = conversation.id; // Burada conversationId'yi alıyoruz
+                          _send(conversationId, _textController.text);
+                        } else {
+                          print('No conversation found!');
+                        }
+                      } else if (state is ChatMessagesLoaded) {
+                        _send(state.conversationId, _textController.text);
+                      } else {
+                        print('State is neither ChatMessagesLoaded nor ChatConversationsLoaded');
+                      }
+                    }
+
+
+
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // "Typing..." için animasyonlu widget
-  Widget _typingIndicator() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _dot(),
-        SizedBox(width: 4),
-        _dot(delay: 300),
-        SizedBox(width: 4),
-        _dot(delay: 600),
-      ],
-    );
-  }
-
-  Widget _dot({int delay = 0}) {
-    return TweenAnimationBuilder<double>(
-      duration: Duration(milliseconds: 900),
-      curve: Curves.easeInOut,
-      tween: Tween(begin: 0.3, end: 1),
-      builder: (context, value, child) {
-        return Opacity(opacity: value, child: child);
-      },
-      onEnd: () => Future.delayed(Duration(milliseconds: delay)),
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(color: Colors.black, shape: BoxShape.circle),
       ),
     );
   }
