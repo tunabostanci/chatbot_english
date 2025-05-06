@@ -20,13 +20,7 @@ class ChatCubit extends Cubit<ChatState> {
 
     _service.fetchConversations(userId).then((conversations) {
       if (conversations.isEmpty) {
-        print("No conversations found. Creating a new conversation.");
-        _service
-            .createNewConversation(userId, "New Conversation")
-            .then((conversationId) {
-          print("New conversation created with ID: $conversationId");
-          loadConversations(userId); // Reload conversations after creation
-        });
+        _createNewConversationAndReload(userId);
       } else {
         emit(ChatConversationsLoaded(conversations));
       }
@@ -35,19 +29,28 @@ class ChatCubit extends Cubit<ChatState> {
     });
 
     _convoSub = _service.conversationStream(userId).listen(
-      (convos) {
+          (convos) {
         emit(ChatConversationsLoaded(convos));
       },
       onError: (e) => emit(ChatStateError(e.toString())),
     );
   }
 
+  void _createNewConversationAndReload(String userId) {
+    print("No conversations found. Creating a new conversation.");
+    _service
+        .createNewConversation(userId, "New Conversation")
+        .then((conversationId) {
+      print("New conversation created with ID: $conversationId");
+      loadConversations(userId); // Reload conversations after creation
+    });
+  }
+
   /// Yeni bir sohbet oluşturur ve listeyi günceller
   Future<void> createConversation(String userId, String title) async {
-    emit(ChatStateLoading());
     try {
       await _service.createNewConversation(userId, title);
-      loadConversations(userId);
+      loadConversations(userId); // loadConversations metodu zaten ChatStateLoading() emit ediyor
     } catch (e) {
       emit(ChatStateError(e.toString()));
     }
@@ -72,20 +75,11 @@ class ChatCubit extends Cubit<ChatState> {
     );
     print('Load messages state i : $state');
   }
-
-
   /// Kullanıcı ve bot mesajlarını kaydeder
   Future<void> sendMessage(String userId, String conversationId, String text) async {
     try {
-      // Kullanıcı mesajını kaydet
-      final messageRef = await _firestore.collection('messages').add({
-        'sender': 'user',
-        'text': text,
-        'timestamp': DateTime.now(),
-      });
-
       final userMessage = ChatMessage(
-        id: messageRef.id,
+        id: '', // Firestore .add() zaten otomatik ID atıyor
         sender: 'user',
         text: text,
         timestamp: DateTime.now(),
@@ -93,13 +87,11 @@ class ChatCubit extends Cubit<ChatState> {
       await _service.saveMessage(userId, conversationId, userMessage);
       print('Kullanıcı mesajı gönderiliyor: $text');
 
-      // AI bot cevabını al
       final botText = await _service.getBotResponse(text);
       print('AI yanıtı alındı: $botText');
 
-      // Bot mesajını kaydet
       final botMessage = ChatMessage(
-        id: '',  // Burada bot mesajını kaydederken id kullanmaya gerek yok, Firestore otomatik verir.
+        id: '',
         sender: 'bot',
         text: botText,
         timestamp: DateTime.now(),
@@ -108,10 +100,11 @@ class ChatCubit extends Cubit<ChatState> {
 
       loadMessages(userId, conversationId);
     } catch (e) {
-      // Hata durumunda hata mesajı verir
-      emit(ChatStateError('Mesaj gönderilirken bir hata oluştu: $e'));
+      print('error $e');
+      emit(ChatStateError('Mesaj gönderilirken bir hata oluştu: ${e.toString()}'));
     }
   }
+
 
 
   @override

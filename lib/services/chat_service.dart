@@ -139,7 +139,9 @@ class ChatService {
       final res = await _ai.onChatCompletion(request: req);
       print("AI cevabı: ${res?.choices.first.message?.content}");
       return res?.choices.first.message?.content.trim() ?? 'AI yanıt veremedi.';
-    } catch (_) {
+    } catch (e,stack) {
+      print('AI yanıt verirken hata oluştu: $e');
+      print('Stack trace: $stack');
       return 'AI yanıt veremedi.';
     }
   }

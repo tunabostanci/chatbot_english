@@ -1,6 +1,6 @@
 import '../models/conversation.dart';
 import '../models/chat_message.dart';
-
+import 'chat_cubit.dart';
 /// ChatState abstract class
 abstract class ChatState {}
 

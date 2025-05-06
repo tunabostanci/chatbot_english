@@ -1,3 +1,4 @@
+import 'package:chatbot3/services/chat_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -18,12 +19,12 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scroll = ScrollController();
   final TextEditingController _textController = TextEditingController();
   late final String _uid;
+  String? _activeConversationId; // ✅ seçilen konuşma ID'si
 
   @override
   void initState() {
     super.initState();
     _uid = FirebaseAuth.instance.currentUser!.uid;
-    // Geçmiş sohbetleri yükle
     context.read<ChatCubit>().loadConversations(_uid);
   }
 
@@ -31,11 +32,16 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.trim().isEmpty) return;
     context.read<ChatCubit>().sendMessage(_uid, conversationId, text);
     _textController.clear();
-    _scroll.animateTo(
-      _scroll.position.maxScrollExtent + 60,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scroll.hasClients) {
+        _scroll.animateTo(
+          _scroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -57,9 +63,7 @@ class _ChatScreenState extends State<ChatScreen> {
               accountName: Text(FirebaseAuth.instance.currentUser?.displayName ?? ''),
               accountEmail: Text(FirebaseAuth.instance.currentUser?.email ?? ''),
               currentAccountPicture: CircleAvatar(
-                backgroundImage: NetworkImage(
-                  FirebaseAuth.instance.currentUser?.photoURL ?? '',
-                ),
+                backgroundImage: NetworkImage(FirebaseAuth.instance.currentUser?.photoURL ?? ''),
               ),
             ),
             const Padding(
@@ -89,24 +93,19 @@ class _ChatScreenState extends State<ChatScreen> {
                             : convo.title;
                         return ListTile(
                           leading: const Icon(Icons.chat_bubble_outline),
-                          title: Text(
-                            preview,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          title: Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis),
                           subtitle: Text(
-                            // Başlık altına lastUpdated ekleyin
                             DateFormat('dd/MM – HH:mm').format(convo.lastUpdated as DateTime),
                           ),
                           onTap: () {
                             Navigator.pop(context);
+                            _activeConversationId = convo.id; // ✅ ID’yi kaydet
                             context.read<ChatCubit>().loadMessages(_uid, convo.id);
                           },
                         );
                       },
                     );
                   }
-                  // Hata veya başka durumda mesaj göster
                   return const Center(child: Text('Veri yüklenemedi'));
                 },
               ),
@@ -132,15 +131,16 @@ class _ChatScreenState extends State<ChatScreen> {
                 } else if (state is ChatMessagesLoaded) {
                   final messages = state.messages;
 
-                  if (messages.isEmpty) {
-                    return const Center(child: Text('Henüz mesaj yok'));
-                  }
-                  // Scroll to bottom on new message
                   WidgetsBinding.instance.addPostFrameCallback((_) {
                     if (_scroll.hasClients) {
                       _scroll.jumpTo(_scroll.position.maxScrollExtent);
                     }
                   });
+
+                  if (messages.isEmpty) {
+                    return const Center(child: Text('Henüz mesaj yok'));
+                  }
+
                   return ListView.builder(
                     controller: _scroll,
                     itemCount: messages.length,
@@ -180,40 +180,24 @@ class _ChatScreenState extends State<ChatScreen> {
                     controller: _textController,
                     decoration: const InputDecoration(hintText: "Type a message..."),
                     onSubmitted: (text) {
-                      final state = context.read<ChatCubit>().state;
-                      if (state is ChatMessagesLoaded) {
-                        _send(state.conversationId, text);
+                      if (_activeConversationId != null) {
+                        _send(_activeConversationId!, text);
                       }
                     },
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.send, color: Colors.blue),
-                    onPressed: () {
-                      print('Send button pressed.');
-                      final state = context.read<ChatCubit>().state;
-                      print('Current state: $state');
+                  onPressed: () {
+                    final text = _textController.text.trim();
+                    if (text.isEmpty) return;
 
-                      if (state is ChatConversationsLoaded) {
-                        print('Conversations list: ${state.conversations}');
-
-                        // conversations listesinden bir tane seçelim
-                        final conversation = state.conversations.isNotEmpty ? state.conversations[0] : null;
-                        if (conversation != null) {
-                          String conversationId = conversation.id; // Burada conversationId'yi alıyoruz
-                          _send(conversationId, _textController.text);
-                        } else {
-                          print('No conversation found!');
-                        }
-                      } else if (state is ChatMessagesLoaded) {
-                        _send(state.conversationId, _textController.text);
-                      } else {
-                        print('State is neither ChatMessagesLoaded nor ChatConversationsLoaded');
-                      }
+                    if (_activeConversationId != null) {
+                      _send(_activeConversationId!, text);
+                    } else {
+                      print('Sohbet seçilmemiş!');
                     }
-
-
-
+                  },
                 ),
               ],
             ),
@@ -223,3 +207,4 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
+
