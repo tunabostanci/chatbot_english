@@ -10,11 +10,12 @@ class LoadingScreen {
   void show({required BuildContext context, required String text}) {
     if (_context != null) return; // Eğer zaten açık bir loading varsa, tekrar açma
 
-    _context = context;
+
     showDialog(
       context: context,
       barrierDismissible: false, // Kullanıcı ekrana basarak kapatamaz
       builder: (context) {
+        _context = context;
         return WillPopScope(
           onWillPop: () async => false, // Geri tuşu ile kapatılmasını engelle
           child: AlertDialog(
@@ -33,9 +34,9 @@ class LoadingScreen {
   }
 
   void hide() {
-    if (_context != null) {
+    if (_context != null && Navigator.canPop(_context!)) {
       Navigator.of(_context!).pop(); // Açık olan loading ekranını kapat
-      _context = null;
     }
+    _context = null;
   }
 }

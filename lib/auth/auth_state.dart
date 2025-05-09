@@ -13,8 +13,10 @@ abstract class AuthState extends Equatable {
 
 // Başlangıç durumu
 class AuthStateInitial extends AuthState {
-  const AuthStateInitial({required super.isLoading});
+  const AuthStateInitial({required super.isLoading, String? loadingText})
+      : super(loadingText: loadingText ?? 'Lütfen bekleyin...');
 }
+
 
 // Kullanıcı giriş yapmışsa
 class AuthStateLoggedIn extends AuthState {
@@ -33,10 +35,15 @@ class AuthStateNeedsVerification extends AuthState {
 
 // Kullanıcı çıkış yapmışsa
 class AuthStateLoggedOut extends AuthState {
-  const AuthStateLoggedOut({required String errorMessage}) : super(isLoading: false);
+  final String errorMessage;
 
-  get errorMessage => null;
+  const AuthStateLoggedOut({required this.errorMessage})
+      : super(isLoading: false);
+
+  @override
+  List<Object?> get props => [errorMessage];
 }
+
 
 // Şifre sıfırlama ekranındaysa
 class AuthStateForgotPassword extends AuthState {
