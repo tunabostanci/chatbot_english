@@ -4,108 +4,99 @@ import '../models/conversation.dart';
 import '../models/chat_message.dart';
 import '../services/chat_service.dart';
 import 'chat_state.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
 class ChatCubit extends Cubit<ChatState> {
   final ChatService _service;
   StreamSubscription<List<Conversation>>? _convoSub;
   StreamSubscription<List<ChatMessage>>? _messageSub;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   ChatCubit(this._service) : super(ChatInitial());
 
-  /// Drawer'da gösterilecek sohbet özetlerini yükler
+  /// Kullanıcıya ait sohbet özetlerini yükler ve stream'e abone olur
   void loadConversations(String userId) {
     emit(ChatStateLoading());
     _convoSub?.cancel();
 
-    _service.fetchConversations(userId).then((conversations) {
-      if (conversations.isEmpty) {
-        _createNewConversationAndReload(userId);
-      } else {
-        emit(ChatConversationsLoaded(conversations));
-      }
-    }).catchError((e) {
-      emit(ChatStateError(e.toString()));
-    });
-
     _convoSub = _service.conversationStream(userId).listen(
           (convos) {
-        emit(ChatConversationsLoaded(convos));
+        if (convos.isEmpty) {
+          // Eğer sohbet yoksa yeni bir sohbet oluşturulacak
+          _createNewConversationAndReload(userId);
+        } else {
+          emit(ChatConversationsLoaded(convos));
+        }
       },
-      onError: (e) => emit(ChatStateError(e.toString())),
+      onError: (e) => emit(ChatStateError('Sohbetler yüklenemedi: $e')),
     );
   }
 
-  void _createNewConversationAndReload(String userId) {
-    print("No conversations found. Creating a new conversation.");
-    _service
-        .createNewConversation(userId, "New Conversation")
-        .then((conversationId) {
-      print("New conversation created with ID: $conversationId");
-      loadConversations(userId); // Reload conversations after creation
-    });
-  }
-
-  /// Yeni bir sohbet oluşturur ve listeyi günceller
-  Future<void> createConversation(String userId, String title) async {
+  /// Hiç sohbet yoksa yeni bir tane oluşturur ve stream'i yeniden tetikler
+  void _createNewConversationAndReload(String userId) async {
     try {
-      await _service.createNewConversation(userId, title);
-      loadConversations(userId); // loadConversations metodu zaten ChatStateLoading() emit ediyor
+      final conversationId = await _service.createNewConversation(userId, "New Conversation");
+      print("Yeni sohbet oluşturuldu: $conversationId");
+      // Yeni sohbet oluşturulduktan sonra, mesajları yüklemek için loadMessages tetiklenebilir
+      loadMessages(userId, conversationId); // Yeni sohbetin mesajlarını yükle
     } catch (e) {
-      emit(ChatStateError(e.toString()));
+      emit(ChatStateError("Yeni sohbet oluşturulamadı: $e"));
     }
   }
 
-  /// Seçilen sohbetin mesaj akışını dinler
+  /// Yeni bir sohbet oluşturur
+  Future<void> createConversation(String userId, String title) async {
+    try {
+      await _service.createNewConversation(userId, title);
+      // Stream zaten tetiklenecek
+    } catch (e) {
+      emit(ChatStateError("Sohbet oluşturulamadı: $e"));
+    }
+  }
+
+  /// Belirli bir sohbetin mesajlarını stream olarak dinler
   void loadMessages(String userId, String conversationId) {
-    _messageSub?.cancel(); // Eski stream iptal
-    emit(ChatStateLoading()); // Yükleme durumu
+    emit(ChatStateLoading());
+    _messageSub?.cancel();
 
     _messageSub = _service.messageStream(userId, conversationId).listen(
-          (msgs) {
-        if (msgs.isNotEmpty) {
-          emit(ChatMessagesLoaded(conversationId, msgs));
-          print('Mesajlar yuklendi: ${msgs.length} adet.');// Mesajlar yüklendi
-        } else {
-          emit(ChatMessagesLoaded(conversationId, [])); // Boş mesajlar
-          print('Mesaj yok');
-        }
+          (messages) {
+        emit(ChatMessagesLoaded(conversationId, messages));
+        print("Mesajlar güncellendi: ${messages.length} adet");
       },
-      onError: (e) => emit(ChatStateError(e.toString())), // Hata durumu
+      onError: (e) => emit(ChatStateError("Mesajlar yüklenemedi: $e")),
     );
-    print('Load messages state i : $state');
   }
-  /// Kullanıcı ve bot mesajlarını kaydeder
+
+  /// Kullanıcı mesajı gönderir ve ardından bot yanıtını kaydeder
   Future<void> sendMessage(String userId, String conversationId, String text) async {
     try {
+      final timestamp = DateTime.now();
+
       final userMessage = ChatMessage(
-        id: '', // Firestore .add() zaten otomatik ID atıyor
+        id: '',
         sender: 'user',
         text: text,
-        timestamp: DateTime.now(),
+        timestamp: timestamp,
       );
-      await _service.saveMessage(userId, conversationId, userMessage);
-      print('Kullanıcı mesajı gönderiliyor: $text');
 
-      final botText = await _service.getBotResponse(text);
-      print('AI yanıtı alındı: $botText');
+      await _service.saveMessage(userId, conversationId, userMessage);
+      print('Kullanıcı mesajı: "$text"');
+
+      final botResponse = await _service.getBotResponse(text);
+      print('Bot yanıtı: "$botResponse"');
 
       final botMessage = ChatMessage(
         id: '',
         sender: 'bot',
-        text: botText,
-        timestamp: DateTime.now(),
+        text: botResponse,
+        timestamp: timestamp, // Aynı timestamp ile
       );
-      await _service.saveMessage(userId, conversationId, botMessage);
 
-      loadMessages(userId, conversationId);
+      await _service.saveMessage(userId, conversationId, botMessage);
     } catch (e) {
-      print('error $e');
-      emit(ChatStateError('Mesaj gönderilirken bir hata oluştu: ${e.toString()}'));
+      print("Mesaj gönderim hatası: $e");
+      emit(ChatStateError("Mesaj gönderilirken hata oluştu: $e"));
     }
   }
-
-
 
   @override
   Future<void> close() async {

@@ -1,4 +1,3 @@
-import 'package:chatbot3/services/chat_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -19,7 +18,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scroll = ScrollController();
   final TextEditingController _textController = TextEditingController();
   late final String _uid;
-  String? _activeConversationId; // ✅ seçilen konuşma ID'si
+  String? _activeConversationId;
 
   @override
   void initState() {
@@ -41,6 +40,14 @@ class _ChatScreenState extends State<ChatScreen> {
           curve: Curves.easeOut,
         );
       }
+    });
+  }
+
+  void _startNewConversation() {
+    // Burada yeni sohbet başlatmak için gerekli işlemi yapabilirsiniz
+    context.read<ChatCubit>().createConversation(_uid,"");
+    setState(() {
+      _activeConversationId = null;  // Yeni sohbet başlatıldığında aktif sohbet id'sini sıfırlıyoruz
     });
   }
 
@@ -81,7 +88,16 @@ class _ChatScreenState extends State<ChatScreen> {
                   } else if (state is ChatConversationsLoaded) {
                     final convos = state.conversations;
                     if (convos.isEmpty) {
-                      return const Center(child: Text('Henüz sohbet yok'));
+                      return Column(
+                        children: [
+                          const Center(child: Text('Henüz sohbet yok')),
+                          const SizedBox(height: 20),
+                          ElevatedButton(
+                            onPressed: _startNewConversation,
+                            child: const Text("Yeni Sohbet Başlat"),
+                          ),
+                        ],
+                      );
                     }
                     return ListView.separated(
                       itemCount: convos.length,
@@ -95,11 +111,13 @@ class _ChatScreenState extends State<ChatScreen> {
                           leading: const Icon(Icons.chat_bubble_outline),
                           title: Text(preview, maxLines: 1, overflow: TextOverflow.ellipsis),
                           subtitle: Text(
-                            DateFormat('dd/MM – HH:mm').format(convo.lastUpdated as DateTime),
+                            DateFormat('dd/MM – HH:mm').format(convo.lastUpdated.toDate()),
                           ),
                           onTap: () {
                             Navigator.pop(context);
-                            _activeConversationId = convo.id; // ✅ ID’yi kaydet
+                            setState(() {
+                              _activeConversationId = convo.id;
+                            });
                             context.read<ChatCubit>().loadMessages(_uid, convo.id);
                           },
                         );
@@ -182,6 +200,10 @@ class _ChatScreenState extends State<ChatScreen> {
                     onSubmitted: (text) {
                       if (_activeConversationId != null) {
                         _send(_activeConversationId!, text);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text("Lütfen önce bir sohbet seçin.")),
+                        );
                       }
                     },
                   ),
@@ -195,7 +217,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     if (_activeConversationId != null) {
                       _send(_activeConversationId!, text);
                     } else {
-                      print('Sohbet seçilmemiş!');
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Lütfen önce bir sohbet seçin.")),
+                      );
                     }
                   },
                 ),
@@ -207,4 +231,3 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 }
-

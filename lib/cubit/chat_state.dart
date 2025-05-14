@@ -1,28 +1,31 @@
 import '../models/conversation.dart';
 import '../models/chat_message.dart';
-import 'chat_cubit.dart';
-/// ChatState abstract class
+
+/// ChatState - Tüm olası sohbet durumlarını tanımlar
 abstract class ChatState {}
 
-/// Initial State
+/// Başlangıç durumu (ilk açılışta vs.)
 class ChatInitial extends ChatState {}
 
-/// Loading State
+/// Yükleme durumu (API veya Firestore verisi bekleniyor)
 class ChatStateLoading extends ChatState {}
 
-/// Error State
+/// Hata durumu
 class ChatStateError extends ChatState {
   final String message;
   ChatStateError(this.message);
+
+  @override
+  String toString() => 'ChatStateError: $message';
 }
 
-/// Conversations Loaded State
+/// Sohbet özetleri başarıyla yüklendi
 class ChatConversationsLoaded extends ChatState {
   final List<Conversation> conversations;
-  ChatConversationsLoaded(  this.conversations);
+  ChatConversationsLoaded(this.conversations);
 }
 
-/// Messages Loaded State
+/// Seçilen sohbetin mesajları başarıyla yüklendi
 class ChatMessagesLoaded extends ChatState {
   final String conversationId;
   final List<ChatMessage> messages;

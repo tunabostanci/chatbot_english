@@ -5,14 +5,22 @@ class Conversation {
   final String title;
   final Timestamp lastUpdated;
 
-  Conversation({required this.id, required this.title, required this.lastUpdated});
+  Conversation({
+    required this.id,
+    required this.title,
+    required this.lastUpdated,
+  });
 
   factory Conversation.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+
+    // Eğer 'lastUpdated' verisi null ise, şu anki zamanı al
+    final lastUpdated = data['lastUpdated'] ?? Timestamp.now();
+
     return Conversation(
       id: doc.id,
-      title: data['title'],
-      lastUpdated: data['lastUpdated'],
+      title: data['title'] ?? '', // Eğer title null ise boş string gönder
+      lastUpdated: lastUpdated,
     );
   }
 

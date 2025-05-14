@@ -1,4 +1,3 @@
-// chat_message.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatMessage {
@@ -16,11 +15,18 @@ class ChatMessage {
 
   // Firestore'dan veriyi almak için fromDoc metodu
   factory ChatMessage.fromDoc(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+
+    // Veriyi çekerken timestamp'in doğru formatta olup olmadığını kontrol et
+    final timestamp = data['timestamp'] != null && data['timestamp'] is Timestamp
+        ? (data['timestamp'] as Timestamp).toDate() // Timestamp verisini DateTime'a dönüştür
+        : DateTime.now(); // Eğer timestamp verisi yoksa, şu anki zamanı kullan
+
     return ChatMessage(
       id: doc.id,
-      sender: doc['sender'],
-      text: doc['text'],
-      timestamp: (doc['timestamp'] as Timestamp).toDate(),
+      sender: data['sender'] ?? '', // sender null ise boş string döndür
+      text: data['text'] ?? '',     // text null ise boş string döndür
+      timestamp: timestamp,
     );
   }
 
@@ -29,7 +35,7 @@ class ChatMessage {
     return {
       'sender': sender,
       'text': text,
-      'timestamp': timestamp,
+      'timestamp': Timestamp.fromDate(timestamp), // timestamp'i Firestore Timestamp formatına dönüştür
     };
   }
 }

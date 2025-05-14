@@ -5,53 +5,44 @@ import '../models/conversation.dart';
 import '../models/chat_message.dart';
 
 class ChatService {
-  OpenAI? _openAI;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final OpenAI _openAI;
 
-  OpenAI get _ai {
-    if (_openAI == null) {
-      final apiKey = dotenv.env['OPENAI_API_KEY']!;
-      _openAI = OpenAI.instance.build(
-        token: apiKey,
-        baseOption: HttpSetup(receiveTimeout: const Duration(seconds: 10)),
-      );
-    }
-    return _openAI!;
-  }
+  ChatService() : _openAI = OpenAI.instance.build(
+    token: dotenv.env['OPENAI_API_KEY']!,
+    baseOption: HttpSetup(receiveTimeout: const Duration(seconds: 10)),
+  );
 
-  /// Stream: tüm sohbet özetlerini gerçek zamanlı getirir
+  /// Yardımcı referanslar
+  CollectionReference<Map<String, dynamic>> _userRef(String userId) =>
+      _firestore.collection('users').doc(userId).collection('conversations');
+
+  CollectionReference<Map<String, dynamic>> _messagesRef(
+      String userId, String conversationId) =>
+      _userRef(userId).doc(conversationId).collection('messages');
+
+  /// Sohbet listesini dinler
   Stream<List<Conversation>> conversationStream(String userId) {
-    return _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('conversations')
+    return _userRef(userId)
         .orderBy('lastUpdated', descending: true)
         .snapshots()
         .map((qs) {
-      // Verilerin geldiğini kontrol et
       print("Veriler geldi: ${qs.docs.length} konuşma bulundu.");
-      return qs.docs.map((d) => Conversation.fromFirestore(d)).toList();
+      return qs.docs.map(Conversation.fromFirestore).toList();
     });
   }
 
-  /// Future: sohbet özetlerini bir kez getirir
+  /// Sohbet listesini bir kere çeker
   Future<List<Conversation>> fetchConversations(String userId) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('conversations')
+    final snapshot = await _userRef(userId)
         .orderBy('lastUpdated', descending: true)
         .get();
-    return snapshot.docs.map((d) => Conversation.fromFirestore(d)).toList();
+    return snapshot.docs.map(Conversation.fromFirestore).toList();
   }
 
   /// Yeni sohbet oluşturur
   Future<String> createNewConversation(String userId, String title) async {
-    final docRef = _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('conversations')
-        .doc();
+    final docRef = _userRef(userId).doc();
     await docRef.set({
       'title': title,
       'lastUpdated': Timestamp.now(),
@@ -59,116 +50,83 @@ class ChatService {
     return docRef.id;
   }
 
-  /// Sohbet başlatılmamışsa yeni bir sohbet başlatır
+  /// Mevcut ya da yeni sohbet ID'sini döner
   Future<String> getOrCreateConversation(String userId, String title) async {
-    // Kullanıcı için sohbetlerin olup olmadığını kontrol et
     final conversations = await fetchConversations(userId);
-
-    if (conversations.isEmpty) {
-      // Sohbet yoksa, yeni bir sohbet oluştur
-      return await createNewConversation(userId, title);
-    } else {
-      // Eğer sohbet varsa, ilk sohbetin ID'sini döndür
-      return conversations.first.id;
-    }
+    return conversations.isEmpty
+        ? await createNewConversation(userId, title)
+        : conversations.first.id;
   }
 
-  /// Stream: belirli bir sohbete ait mesaj akışını getirir
-  Stream<List<ChatMessage>> messageStream(String userId, String conversationId) {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('conversations')
-        .doc(conversationId)
-        .collection('messages')
+  /// Belirli sohbetin mesajlarını dinler
+  Stream<List<ChatMessage>> messageStream(
+      String userId, String conversationId) {
+    return _messagesRef(userId, conversationId)
         .orderBy('timestamp')
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => ChatMessage.fromDoc(doc)).toList());
+        snapshot.docs.map(ChatMessage.fromDoc).toList());
   }
 
-
-
-
-  /// Mesaj kaydeder ve lastUpdated günceller
-  Future<void> saveMessage(String userId, String conversationId, ChatMessage msg) async {
+  /// Mesaj kaydeder ve zaman damgasını günceller
+  Future<void> saveMessage(
+      String userId, String conversationId, ChatMessage msg) async {
     try {
-      final messagesRef = _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('conversations')
-          .doc(conversationId)
-          .collection('messages');
+      final ref = _messagesRef(userId, conversationId);
+      await ref.add(msg.toJson());
 
-      // Mesajı ekliyoruz
-      await messagesRef.add(msg.toJson());
-
-      // Mesaj eklendikten sonra lastUpdated zamanını güncelliyoruz
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('conversations')
-          .doc(conversationId)
+      await _userRef(userId).doc(conversationId)
           .update({'lastUpdated': Timestamp.now()});
 
-      // Başarı mesajı log'u
-      print('Mesaj başarıyla kaydedildi: ${msg.text}');
+      print('Mesaj kaydedildi: ${msg.text}');
     } catch (e) {
-      // Hata durumunda loglama
-      print('Mesaj kaydedilirken bir hata oluştu: $e');
+      print('Mesaj kaydedilirken hata: $e');
     }
   }
 
-
-  /// AI bot cevabı alır
+  /// AI yanıtı alır
   Future<String> getBotResponse(String userMessage) async {
     try {
-      print("AI'ya gönderilen mesaj: $userMessage");
+      print("AI'ya gönderilen: $userMessage");
       final req = ChatCompleteText(
         messages: [
-          {'role': 'system', 'content': 'You are an AI English tutor, '
-              'send the first message to user and explain yourself such as '
-              'I am a Chatbot for teaching english'
-              ' also dont talk about topics unrelated to english '
-              'and english learning , try to talk about verbs and vocabulary'},
+          {
+            'role': 'system',
+            'content':
+            'You are an AI English tutor. Introduce yourself in your first message. '
+                'Do not discuss topics unrelated to English language learning. Focus on vocabulary and verbs.'
+          },
           {'role': 'user', 'content': userMessage},
         ],
         maxToken: 200,
         model: Gpt4oMiniChatModel(),
       );
-      final res = await _ai.onChatCompletion(request: req);
-      print("AI cevabı: ${res?.choices.first.message?.content}");
-      return res?.choices.first.message?.content.trim() ?? 'AI yanıt veremedi.';
-    } catch (e,stack) {
-      print('AI yanıt verirken hata oluştu: $e');
+      final res = await _openAI.onChatCompletion(request: req);
+      final reply = res?.choices.first.message?.content.trim();
+      print("AI yanıtı: $reply");
+      return reply ?? 'AI yanıt veremedi.';
+    } catch (e, stack) {
+      print('AI yanıtı alınırken hata: $e');
       print('Stack trace: $stack');
       return 'AI yanıt veremedi.';
     }
   }
 
-  // Aliasing for ChatCubit compatibility
-
-  /// ChatCubit loadConversations -> kullanabilir
+  /// ChatCubit destek metodları
   Stream<List<Conversation>> getConversations(String userId) =>
       conversationStream(userId);
 
-  /// ChatCubit loadMessages -> kullanabilir
   Stream<List<ChatMessage>> getMessages(
       String userId, String conversationId) =>
       messageStream(userId, conversationId);
 
-  /// ChatCubit sendMessage -> kullanabilir
   Future<void> sendMessage(
       String userId, String conversationId, ChatMessage msg) =>
       saveMessage(userId, conversationId, msg);
 
-  /// Mesaj göndermeden önce sohbeti kontrol eder ve yeni sohbet başlatır
   Future<void> sendMessageWithConversationCheck(
       String userId, String title, ChatMessage msg) async {
-    // Sohbeti kontrol et ve oluştur
-    String conversationId = await getOrCreateConversation(userId, title);
-
-    // Mesajı kaydet
+    final conversationId = await getOrCreateConversation(userId, title);
     await saveMessage(userId, conversationId, msg);
   }
 }
